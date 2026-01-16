@@ -1,8 +1,8 @@
 // src/App.js - Complete Supabase Tennis Booking System
 // Copy this ENTIRE file and paste it into your src/App.js
 
-import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, User, Users, Settings, LogOut, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Calendar, User, Users, Settings, LogOut, Plus } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const TennisBookingSystem = () => {
@@ -24,32 +24,14 @@ const TennisBookingSystem = () => {
   const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
   const [adminLoginData, setAdminLoginData] = useState({ clubId: '', password: '' });
   const [editingClub, setEditingClub] = useState(null);
+  const [editingCourt, setEditingCourt] = useState(null);
   const [showSuperAdminModal, setShowSuperAdminModal] = useState(false);
   const [superAdminLogin, setSuperAdminLogin] = useState({ email: '', password: '' });
 
   const TODAY = new Date().toISOString().split('T')[0];
   const BOROUGHS = ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'];
 
-  useEffect(() => {
-    checkSession();
-  }, []);
-
-  useEffect(() => {
-    if (view !== 'login') {
-      loadData();
-    }
-  }, [view]);
-
-  const checkSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      await loadUserRole(session.user.id);
-    } else {
-      setLoading(false);
-    }
-  };
-
-  const loadUserRole = async (userId) => {
+  const loadUserRole = useCallback(async (userId) => {
     const { data } = await supabase
       .from('user_roles')
       .select('role, club_id')
@@ -78,9 +60,18 @@ const TennisBookingSystem = () => {
       }
     }
     setLoading(false);
-  };
+  }, []);
 
-  const loadData = async () => {
+  const checkSession = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await loadUserRole(session.user.id);
+    } else {
+      setLoading(false);
+    }
+  }, [loadUserRole]);
+
+  const loadData = useCallback(async () => {
     try {
       const { data: clubsData } = await supabase.from('clubs').select('*');
       setClubs(clubsData || []);
@@ -100,7 +91,17 @@ const TennisBookingSystem = () => {
     } catch (error) {
       console.error('Error loading data:', error);
     }
-  };
+  }, [TODAY]);
+
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+
+  useEffect(() => {
+    if (view !== 'login') {
+      loadData();
+    }
+  }, [view, loadData]);
 
   const handleSuperAdminLogin = async () => {
     try {
@@ -401,6 +402,48 @@ const TennisBookingSystem = () => {
     } catch (error) {
       console.error('Error toggling court status:', error);
       alert('Failed to update court status');
+    }
+  };
+
+  const handleUpdateCourt = async () => {
+    if (!editingCourt.name || !editingCourt.surface) {
+      alert('Please fill in court name and surface');
+      return;
+    }
+
+    try {
+      await supabase
+        .from('courts')
+        .update({
+          name: editingCourt.name,
+          surface: editingCourt.surface
+        })
+        .eq('id', editingCourt.id);
+
+      await loadData();
+      setEditingCourt(null);
+    } catch (error) {
+      console.error('Error updating court:', error);
+      alert('Failed to update court');
+    }
+  };
+
+  const handleDeleteCourt = async (courtId) => {
+    if (!window.confirm('Are you sure you want to delete this court? All associated bookings and hours will also be deleted.')) {
+      return;
+    }
+
+    try {
+      await supabase
+        .from('courts')
+        .delete()
+        .eq('id', courtId);
+
+      await loadData();
+      setEditingCourt(null);
+    } catch (error) {
+      console.error('Error deleting court:', error);
+      alert('Failed to delete court');
     }
   };
 
@@ -989,13 +1032,20 @@ const TennisBookingSystem = () => {
                       <h3 className="font-semibold text-gray-700 mb-3">{club.name} ({club.borough})</h3>
                       <div className="space-y-2">
                         {clubCourts.map(court => (
-                          <div key={court.id} className="border rounded-lg p-3 flex justify-between items-center">
+                          <div
+                            key={court.id}
+                            onClick={() => setEditingCourt({...court})}
+                            className="border rounded-lg p-3 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition"
+                          >
                             <div>
                               <p className="font-medium text-gray-800">{court.name}</p>
                               <p className="text-sm text-gray-500">{court.surface}</p>
                             </div>
                             <button
-                              onClick={() => toggleCourtStatus(court.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCourtStatus(court.id);
+                              }}
                               className={`px-3 py-1 rounded text-sm font-medium ${
                                 court.status === 'active'
                                   ? 'bg-green-100 text-green-700'
@@ -1127,7 +1177,7 @@ const TennisBookingSystem = () => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
               <h3 className="text-xl font-bold mb-4">Edit Club</h3>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1179,6 +1229,64 @@ const TennisBookingSystem = () => {
                   </button>
                   <button
                     onClick={() => setEditingClub(null)}
+                    className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editingCourt && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <h3 className="text-xl font-bold mb-4">Edit Court</h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Court Name
+                  </label>
+                  <input
+                    value={editingCourt.name}
+                    onChange={(e) => setEditingCourt({...editingCourt, name: e.target.value})}
+                    className="w-full p-3 border rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Surface Type
+                  </label>
+                  <select
+                    value={editingCourt.surface}
+                    onChange={(e) => setEditingCourt({...editingCourt, surface: e.target.value})}
+                    className="w-full p-3 border rounded-lg"
+                  >
+                    <option value="">Select Surface</option>
+                    <option value="Hard">Hard</option>
+                    <option value="Clay">Clay</option>
+                    <option value="Grass">Grass</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleUpdateCourt}
+                    className="flex-1 bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition"
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCourt(editingCourt.id)}
+                    className="flex-1 bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition"
+                  >
+                    Delete Court
+                  </button>
+                  <button
+                    onClick={() => setEditingCourt(null)}
                     className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition"
                   >
                     Cancel
