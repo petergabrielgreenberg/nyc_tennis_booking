@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, User, Users, Settings, LogOut, Plus } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
+// edit to push branch
 const TennisBookingSystem = () => {
   const [view, setView] = useState('login');
   const [currentUser, setCurrentUser] = useState(null);
@@ -30,6 +31,54 @@ const TennisBookingSystem = () => {
 
   const TODAY = new Date().toISOString().split('T')[0];
   const BOROUGHS = ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'];
+
+  const updateUrlParams = useCallback((newView, clubId) => {
+    const url = new URL(window.location);
+    if (newView === 'player') {
+      url.searchParams.set('view', 'player');
+      if (clubId) {
+        url.searchParams.set('club', clubId.toString());
+      } else {
+        url.searchParams.delete('club');
+      }
+    } else {
+      url.searchParams.delete('view');
+      url.searchParams.delete('club');
+    }
+    window.history.replaceState({}, '', url);
+  }, []);
+
+  const getUrlParams = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view');
+    const clubParam = params.get('club');
+    return {
+      view: viewParam,
+      clubId: clubParam ? parseInt(clubParam, 10) : null
+    };
+  }, []);
+
+  const loadData = useCallback(async () => {
+    try {
+      const { data: clubsData } = await supabase.from('clubs').select('*');
+      setClubs(clubsData || []);
+
+      const { data: courtsData } = await supabase.from('courts').select('*');
+      setCourts(courtsData || []);
+
+      const { data: hoursData } = await supabase.from('court_hours').select('*');
+      setHours(hoursData || []);
+
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('date', TODAY)
+        .eq('status', 'confirmed');
+      setBookings(bookingsData || []);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+  }, [TODAY]);
 
   const loadUserRole = useCallback(async (userId) => {
     const { data } = await supabase
@@ -67,31 +116,18 @@ const TennisBookingSystem = () => {
     if (session) {
       await loadUserRole(session.user.id);
     } else {
+      const urlParams = getUrlParams();
+      if (urlParams.view === 'player') {
+        setView('player');
+        setCurrentUser({ type: 'player', name: 'Player' });
+        if (urlParams.clubId) {
+          setSelectedClub(urlParams.clubId);
+        }
+        await loadData();
+      }
       setLoading(false);
     }
-  }, [loadUserRole]);
-
-  const loadData = useCallback(async () => {
-    try {
-      const { data: clubsData } = await supabase.from('clubs').select('*');
-      setClubs(clubsData || []);
-
-      const { data: courtsData } = await supabase.from('courts').select('*');
-      setCourts(courtsData || []);
-
-      const { data: hoursData } = await supabase.from('court_hours').select('*');
-      setHours(hoursData || []);
-
-      const { data: bookingsData } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('date', TODAY)
-        .eq('status', 'confirmed');
-      setBookings(bookingsData || []);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    }
-  }, [TODAY]);
+  }, [loadUserRole, getUrlParams, loadData]);
 
   useEffect(() => {
     checkSession();
@@ -170,6 +206,7 @@ const TennisBookingSystem = () => {
     setView('login');
     setCurrentUser(null);
     setSelectedClub(null);
+    updateUrlParams('login', null);
   };
 
   const handleLogin = (type) => {
@@ -181,6 +218,7 @@ const TennisBookingSystem = () => {
     } else if (type === 'player') {
       setView('player');
       setCurrentUser({ type: 'player', name: 'Player' });
+      updateUrlParams('player', null);
       loadData();
     }
   };
@@ -668,7 +706,11 @@ const TennisBookingSystem = () => {
             <h2 className="text-lg font-bold text-gray-800 mb-4">Select Club</h2>
             <select
               value={selectedClub || ''}
-              onChange={(e) => setSelectedClub(parseInt(e.target.value))}
+              onChange={(e) => {
+                const clubId = parseInt(e.target.value);
+                setSelectedClub(clubId);
+                updateUrlParams('player', clubId || null);
+              }}
               className="w-full p-3 border border-gray-300 rounded-lg text-lg"
             >
               <option value="">Choose a club</option>
