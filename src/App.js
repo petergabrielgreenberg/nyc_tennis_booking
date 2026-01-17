@@ -177,6 +177,7 @@ const TennisBookingSystem = () => {
       setShowSuperAdminModal(true);
     } else if (type === 'admin') {
       setShowAdminLoginModal(true);
+      loadData();
     } else if (type === 'player') {
       setView('player');
       setCurrentUser({ type: 'player', name: 'Player' });
