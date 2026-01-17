@@ -57,6 +57,28 @@ const TennisBookingSystem = () => {
     };
   }, []);
 
+  const loadData = useCallback(async () => {
+    try {
+      const { data: clubsData } = await supabase.from('clubs').select('*');
+      setClubs(clubsData || []);
+
+      const { data: courtsData } = await supabase.from('courts').select('*');
+      setCourts(courtsData || []);
+
+      const { data: hoursData } = await supabase.from('court_hours').select('*');
+      setHours(hoursData || []);
+
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('date', TODAY)
+        .eq('status', 'confirmed');
+      setBookings(bookingsData || []);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+  }, [TODAY]);
+
   const loadUserRole = useCallback(async (userId) => {
     const { data } = await supabase
       .from('user_roles')
@@ -105,28 +127,6 @@ const TennisBookingSystem = () => {
       setLoading(false);
     }
   }, [loadUserRole, getUrlParams, loadData]);
-
-  const loadData = useCallback(async () => {
-    try {
-      const { data: clubsData } = await supabase.from('clubs').select('*');
-      setClubs(clubsData || []);
-
-      const { data: courtsData } = await supabase.from('courts').select('*');
-      setCourts(courtsData || []);
-
-      const { data: hoursData } = await supabase.from('court_hours').select('*');
-      setHours(hoursData || []);
-
-      const { data: bookingsData } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('date', TODAY)
-        .eq('status', 'confirmed');
-      setBookings(bookingsData || []);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    }
-  }, [TODAY]);
 
   useEffect(() => {
     checkSession();
