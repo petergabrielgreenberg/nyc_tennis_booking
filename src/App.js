@@ -31,6 +31,32 @@ const TennisBookingSystem = () => {
   const TODAY = new Date().toISOString().split('T')[0];
   const BOROUGHS = ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'];
 
+  const updateUrlParams = useCallback((newView, clubId) => {
+    const url = new URL(window.location);
+    if (newView === 'player') {
+      url.searchParams.set('view', 'player');
+      if (clubId) {
+        url.searchParams.set('club', clubId.toString());
+      } else {
+        url.searchParams.delete('club');
+      }
+    } else {
+      url.searchParams.delete('view');
+      url.searchParams.delete('club');
+    }
+    window.history.replaceState({}, '', url);
+  }, []);
+
+  const getUrlParams = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view');
+    const clubParam = params.get('club');
+    return {
+      view: viewParam,
+      clubId: clubParam ? parseInt(clubParam, 10) : null
+    };
+  }, []);
+
   const loadUserRole = useCallback(async (userId) => {
     const { data } = await supabase
       .from('user_roles')
@@ -67,9 +93,18 @@ const TennisBookingSystem = () => {
     if (session) {
       await loadUserRole(session.user.id);
     } else {
+      const urlParams = getUrlParams();
+      if (urlParams.view === 'player') {
+        setView('player');
+        setCurrentUser({ type: 'player', name: 'Player' });
+        if (urlParams.clubId) {
+          setSelectedClub(urlParams.clubId);
+        }
+        await loadData();
+      }
       setLoading(false);
     }
-  }, [loadUserRole]);
+  }, [loadUserRole, getUrlParams, loadData]);
 
   const loadData = useCallback(async () => {
     try {
@@ -170,6 +205,7 @@ const TennisBookingSystem = () => {
     setView('login');
     setCurrentUser(null);
     setSelectedClub(null);
+    updateUrlParams('login', null);
   };
 
   const handleLogin = (type) => {
@@ -181,6 +217,7 @@ const TennisBookingSystem = () => {
     } else if (type === 'player') {
       setView('player');
       setCurrentUser({ type: 'player', name: 'Player' });
+      updateUrlParams('player', null);
       loadData();
     }
   };
@@ -668,7 +705,11 @@ const TennisBookingSystem = () => {
             <h2 className="text-lg font-bold text-gray-800 mb-4">Select Club</h2>
             <select
               value={selectedClub || ''}
-              onChange={(e) => setSelectedClub(parseInt(e.target.value))}
+              onChange={(e) => {
+                const clubId = parseInt(e.target.value);
+                setSelectedClub(clubId);
+                updateUrlParams('player', clubId || null);
+              }}
               className="w-full p-3 border border-gray-300 rounded-lg text-lg"
             >
               <option value="">Choose a club</option>
