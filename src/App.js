@@ -29,7 +29,16 @@ const TennisBookingSystem = () => {
   const [showSuperAdminModal, setShowSuperAdminModal] = useState(false);
   const [superAdminLogin, setSuperAdminLogin] = useState({ email: '', password: '' });
 
-  const TODAY = new Date().toISOString().split('T')[0];
+  const getESTDate = () => {
+    const now = new Date();
+    const estString = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const estDate = new Date(estString);
+    const year = estDate.getFullYear();
+    const month = String(estDate.getMonth() + 1).padStart(2, '0');
+    const day = String(estDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const TODAY = getESTDate();
   const BOROUGHS = ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'];
 
   const updateUrlParams = useCallback((newView, clubId) => {
